@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxdata="http://www.cluetrust.com/XML/GPXDATA/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.cluetrust.com/XML/GPXDATA/1/0 http://www.cluetrust.com/Schemas/gpxdata10.xsd" version="1.1" creator="http://ridewithgps.com/">
+  <metadata>
+    <name>Ferry FV-GC</name>
+    <link href="https://ridewithgps.com/routes/44931230">
+      <text>Ferry FV-GC</text>
+    </link>
+    <time>2023-11-07T17:24:34Z</time>
+  </metadata>
+  <trk>
+    <name>Ferry FV-GC</name>
+    <trkseg>
+      <trkpt lat="28.048335" lon="-14.360989">
+        <ele>0.8</ele>
+      </trkpt>
+      <trkpt lat="28.050296" lon="-14.36495">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.048426" lon="-14.383276">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.119073" lon="-15.406931">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.137358" lon="-15.410294">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.141076" lon="-15.414641">
+        <ele>0.7</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

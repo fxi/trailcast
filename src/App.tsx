@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Cloud, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Cloud, RefreshCw, Trash2, Upload, ChevronUp, ChevronDown, ZoomIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeProvider } from '@/components/theme-provider';
 import { GpxPoint, ProcessedTrack } from '@/types';
@@ -11,6 +11,18 @@ import { AboutSection } from '@/components/ui/about-section';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Info, List, BarChart2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   processGpxFile,
   getTrackPoints,
@@ -28,6 +40,8 @@ function App() {
   const [selectedTrack, setSelectedTrack] = useState<ProcessedTrack | null>(null);
   const [activeTab, setActiveTab] = useState<string>("profile");
   const [loading, setLoading] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [showDemoDialog, setShowDemoDialog] = useState(false);
   
   // Load saved tracks from localStorage when the app starts
   useEffect(() => {
@@ -41,6 +55,21 @@ function App() {
         updatedAt: track.updatedAt || now
       }));
       setTracks(validatedTracks);
+      
+      // Zoom to the extent of all tracks
+      if (map.current) {
+        const allPoints = validatedTracks.flatMap(track => track.points);
+        if (allPoints.length) {
+          const bounds = calculateBounds(allPoints);
+          map.current.fitBounds(
+            [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+            { padding: 50, duration: 1000 }
+          );
+        }
+      }
+    } else {
+      // If no tracks, show demo data dialog
+      setShowDemoDialog(true);
     }
   }, []);
 
@@ -236,15 +265,52 @@ function App() {
     }
   };
   
-  // Handle deleting a single track
-  const handleDeleteTrack = (trackId: string) => {
-    const updatedTracks = tracks.filter(t => t.id !== trackId);
+  // Handle deleting one or multiple tracks
+  const handleDeleteTrack = (trackId: string | string[]) => {
+    // Handle either a single track ID or an array of track IDs
+    const trackIdsToDelete = Array.isArray(trackId) ? trackId : [trackId];
+    
+    const updatedTracks = tracks.filter(t => !trackIdsToDelete.includes(t.id));
     setTracks(updatedTracks);
     saveTracks(updatedTracks);
     
     // If we deleted the selected track, clear it
-    if (selectedTrack?.id === trackId) {
+    if (selectedTrack && trackIdsToDelete.includes(selectedTrack.id)) {
       setSelectedTrack(null);
+    }
+    
+    // Clean up map layers for each deleted track
+    if (map.current) {
+      trackIdsToDelete.forEach(id => {
+        try {
+          const trackSourceId = `track-${id}`;
+          const trackLayerId = `track-line-${id}`;
+          const weatherSourceId = `weather-${id}`;
+          const weatherSpriteId = `weather-sprite-${id}`;
+          const weatherLabelId = `weather-label-${id}`;
+          
+          // Remove weather layers if they exist
+          if (map.current?.getLayer(weatherLabelId)) {
+            map.current.removeLayer(weatherLabelId);
+          }
+          if (map.current?.getLayer(weatherSpriteId)) {
+            map.current.removeLayer(weatherSpriteId);
+          }
+          if (map.current?.getSource(weatherSourceId)) {
+            map.current.removeSource(weatherSourceId);
+          }
+          
+          // Remove track layer if it exists
+          if (map.current?.getLayer(trackLayerId)) {
+            map.current.removeLayer(trackLayerId);
+          }
+          if (map.current?.getSource(trackSourceId)) {
+            map.current.removeSource(trackSourceId);
+          }
+        } catch (error) {
+          console.error(`Error cleaning up map layers for track ${id}:`, error);
+        }
+      });
     }
   };
 
@@ -518,13 +584,109 @@ function App() {
     return () => {};
   }, [tracks, selectedTrack]);
 
+  // Handle loading demo GPX data
+  const loadDemoData = async () => {
+    setLoading(true);
+    try {
+      // Always use the BASE_URL from Vite
+      const base = import.meta.env.BASE_URL || '/';
+      
+      const files = [
+        `${base}gpx/1.LZ_Lanzarote_-_GGgravel.gpx`,
+        `${base}gpx/2.FV_Fuerteventura_-_GGgravel.gpx`,
+        `${base}gpx/3.GC_GranCanaria_-_GGgravel.gpx`,
+        `${base}gpx/4.TF_Tenerife_-_GGgravel.gpx`,
+        `${base}gpx/5.EH_El_Hierro_-_GGgravel.gpx`
+      ];
+      
+      const timestamp = Date.now();
+      
+      const newTracks = await Promise.all(
+        files.map(async (file) => {
+          const points = await processGpxFile(file);
+          
+          // Get key elevation points (peaks, valleys, etc.)
+          const keyPoints = getTrackPoints(points);
+          
+          // Limit to 10 points for weather API calls
+          const sampledPoints = keyPoints.length > 10 
+            ? [
+                keyPoints[0], // Always include start
+                ...keyPoints.slice(1, keyPoints.length - 1).slice(0, 8), // Take up to 8 middle points
+                keyPoints[keyPoints.length - 1] // Always include end
+              ]
+            : keyPoints;
+          
+          // Fetch weather data for each sampled point
+          const weatherData = await Promise.all(
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
+          );
+
+          // Extract file name without extension and path
+          const name = file.split('/').pop()?.replace(/.gpx$/i, '') || file;
+
+          return {
+            id: crypto.randomUUID(),
+            name,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            points,
+            sampledPoints,
+            weatherData,
+            weatherFetchedAt: timestamp
+          };
+        })
+      );
+
+      setTracks(newTracks);
+      saveTracks(newTracks);
+
+      // Select the first track
+      if (newTracks.length > 0) {
+        setSelectedTrack(newTracks[0]);
+        setActiveTab("profile");
+      }
+
+      // Zoom to all tracks
+      if (map.current) {
+        const allPoints = newTracks.flatMap(track => track.points);
+        if (allPoints.length) {
+          const bounds = calculateBounds(allPoints);
+          map.current.fitBounds(
+            [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+            { padding: 50, duration: 2000 }
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error loading demo data:', error);
+    } finally {
+      setLoading(false);
+      setShowDemoDialog(false);
+    }
+  };
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <div className="min-h-screen bg-background text-foreground">
+        <AlertDialog open={showDemoDialog} onOpenChange={setShowDemoDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Welcome to TrailCast!</AlertDialogTitle>
+              <AlertDialogDescription>
+                Would you like to load a set of demo GPX tracks from the Canary Islands to explore the app's features?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>No, thanks</AlertDialogCancel>
+              <AlertDialogAction onClick={loadDemoData}>Load Demo Data</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <div className="fixed top-4 left-4 right-4 z-10 flex gap-2">
           <Button
             variant="secondary"
-            className="relative overflow-hidden"
+            className="relative overflow-hidden md:flex hidden"
             disabled={loading}
           >
             <input
@@ -539,59 +701,159 @@ function App() {
           </Button>
           <Button
             variant="secondary"
+            className="relative overflow-hidden md:hidden flex"
+            disabled={loading}
+          >
+            <input
+              type="file"
+              multiple
+              accept=".gpx"
+              onChange={handleFileUpload}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+            <Upload className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="secondary"
             onClick={handleRefresh}
             disabled={loading || !tracks.length}
+            className="md:flex hidden"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             variant="secondary"
+            onClick={handleRefresh}
+            disabled={loading || !tracks.length}
+            className="md:hidden flex"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="secondary"
             onClick={handleClear}
             disabled={loading || !tracks.length}
+            className="md:flex hidden"
           >
             <Trash2 className="w-4 h-4 mr-2" />
             Clear
           </Button>
+          <Button
+            variant="secondary"
+            onClick={handleClear}
+            disabled={loading || !tracks.length}
+            className="md:hidden flex"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          
+          {/* Zoom to all tracks button */}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (map.current && tracks.length > 0) {
+                const allPoints = tracks.flatMap(track => track.points);
+                if (allPoints.length) {
+                  const bounds = calculateBounds(allPoints);
+                  map.current.fitBounds(
+                    [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+                    { padding: 50, duration: 1000 }
+                  );
+                }
+              }
+            }}
+            disabled={loading || !tracks.length}
+            className="md:flex hidden"
+          >
+            <ZoomIn className="w-4 h-4 mr-2" />
+            Zoom All
+          </Button>
+          
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (map.current && tracks.length > 0) {
+                const allPoints = tracks.flatMap(track => track.points);
+                if (allPoints.length) {
+                  const bounds = calculateBounds(allPoints);
+                  map.current.fitBounds(
+                    [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+                    { padding: 50, duration: 1000 }
+                  );
+                }
+              }
+            }}
+            disabled={loading || !tracks.length}
+            className="md:hidden flex"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          
           <div className="ml-auto flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded-lg px-3 py-2">
             <Cloud className="w-4 h-4" />
-            <span className="text-sm font-medium">
+            <span className="text-sm font-medium md:inline hidden">
               {tracks.length} track{tracks.length !== 1 ? 's' : ''} loaded
+            </span>
+            <span className="text-sm font-medium md:hidden inline">
+              {tracks.length}
             </span>
           </div>
         </div>
         
         <div
           ref={mapContainer}
-          className="w-full h-[calc(100vh-350px)]"
+          className={`w-full ${panelOpen ? 'h-[calc(100vh-350px)]' : 'h-screen'}`}
         />
         
         {/* Bottom panel with tabs */}
-        <div className="fixed bottom-0 left-0 right-0 z-10 bg-background h-[350px] border-t">
-          <Tabs 
-            value={activeTab} 
-            onValueChange={setActiveTab}
-            className="px-4 h-full flex flex-col"
-          >
-            <TabsList className="w-full justify-start mb-2 mt-2">
-              <TabsTrigger value="profile" className="flex items-center gap-1">
-                <BarChart2 className="w-4 h-4" />
-                <span>Profile</span>
-              </TabsTrigger>
-              <TabsTrigger value="tracks" className="flex items-center gap-1">
-                <List className="w-4 h-4" />
-                <span>Tracks</span>
-                {tracks.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {tracks.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="about" className="flex items-center gap-1">
-                <Info className="w-4 h-4" />
-                <span>About</span>
-              </TabsTrigger>
-            </TabsList>
+        <Collapsible 
+          open={panelOpen} 
+          onOpenChange={setPanelOpen} 
+          className="fixed bottom-0 left-0 right-0 z-10"
+        >
+          <CollapsibleTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="absolute -top-8 right-4 bg-background border border-t border-x z-10"
+            >
+              {panelOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="bg-background h-[350px] border-t">
+            <Tabs 
+              value={activeTab} 
+              onValueChange={setActiveTab}
+              className="px-4 h-full flex flex-col"
+            >
+            <div className="flex justify-between items-center mb-2 mt-2">
+              <TabsList className="justify-start">
+                <TabsTrigger value="profile" className="flex items-center gap-1">
+                  <BarChart2 className="w-4 h-4" />
+                  <span className="md:inline hidden">Profile</span>
+                </TabsTrigger>
+                <TabsTrigger value="tracks" className="flex items-center gap-1">
+                  <List className="w-4 h-4" />
+                  <span className="md:inline hidden">Tracks</span>
+                  {tracks.length > 0 && (
+                    <Badge variant="secondary" className="ml-1">
+                      {tracks.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="about" className="flex items-center gap-1">
+                  <Info className="w-4 h-4" />
+                  <span className="md:inline hidden">About</span>
+                </TabsTrigger>
+              </TabsList>
+              
+              {tracks.length > 0 && selectedTrack?.weatherData && (
+                <div className="text-xs text-muted-foreground mr-2">
+                  Weather data from: {new Date(selectedTrack.weatherFetchedAt || Date.now()).toLocaleDateString()}
+                </div>
+              )}
+            </div>
             
             <div className="flex-1 overflow-hidden">
               <TabsContent value="profile" className="m-0 h-full">
@@ -621,7 +883,8 @@ function App() {
               </TabsContent>
             </div>
           </Tabs>
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
     </ThemeProvider>
   );

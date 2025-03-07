@@ -9,8 +9,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export async function processGpxFile(file: File): Promise<GpxPoint[]> {
-  const text = await file.text();
+export async function processGpxFile(file: File | string): Promise<GpxPoint[]> {
+  let text;
+  if (typeof file === 'string') {
+    // If file is a URL string, fetch it
+    const response = await fetch(file);
+    text = await response.text();
+  } else {
+    // If file is a File object, read it
+    text = await file.text();
+  }
+  
   const parser = new DOMParser();
   const gpxDoc = parser.parseFromString(text, 'text/xml');
   const geoJson = toGeoJSON.gpx(gpxDoc);

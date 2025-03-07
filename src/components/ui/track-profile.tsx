@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Card } from "@/components/ui/card";
 import { GpxPoint, ProcessedTrack } from "@/types";
 
@@ -11,10 +11,12 @@ interface TrackProfileProps {
 export function TrackProfile({ track, onCursorChange }: TrackProfileProps) {
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
   const [profileData, setProfileData] = useState<Array<{distance: number; elevation: number; original: GpxPoint}>>([]);
+  const [currentElevation, setCurrentElevation] = useState<number | null>(null);
   
   useEffect(() => {
     if (!track) {
       setProfileData([]);
+      setCurrentElevation(null);
       return;
     }
     
@@ -32,14 +34,19 @@ export function TrackProfile({ track, onCursorChange }: TrackProfileProps) {
     if (data.activeTooltipIndex !== undefined) {
       setActivePointIndex(data.activeTooltipIndex);
       
-      if (onCursorChange && profileData[data.activeTooltipIndex]) {
-        onCursorChange(profileData[data.activeTooltipIndex].original);
+      if (profileData[data.activeTooltipIndex]) {
+        setCurrentElevation(profileData[data.activeTooltipIndex].elevation);
+        
+        if (onCursorChange) {
+          onCursorChange(profileData[data.activeTooltipIndex].original);
+        }
       }
     }
   };
 
   const handleMouseLeave = () => {
     setActivePointIndex(null);
+    setCurrentElevation(null);
     if (onCursorChange) {
       onCursorChange(null);
     }
@@ -64,6 +71,9 @@ export function TrackProfile({ track, onCursorChange }: TrackProfileProps) {
         <div className="text-sm text-muted-foreground">
           <span className="mr-4">Distance: {totalDistance.toFixed(1)} km</span>
           <span>Elevation gain: {(maxElevation - minElevation).toFixed(0)} m</span>
+          {currentElevation !== null && (
+            <span className="ml-4">Current: {currentElevation.toFixed(0)} m</span>
+          )}
         </div>
       </div>
       
@@ -73,21 +83,16 @@ export function TrackProfile({ track, onCursorChange }: TrackProfileProps) {
             data={profileData}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
+            margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="distance" 
-              label={{ value: 'Distance (km)', position: 'insideBottom', offset: -5 }}
               tickFormatter={(value) => value.toFixed(1)}
             />
             <YAxis 
-              label={{ value: 'Elevation (m)', angle: -90, position: 'insideLeft' }}
               domain={[minElevation * 0.9, maxElevation * 1.1]}
               tickFormatter={(value) => value.toFixed(0)}
-            />
-            <Tooltip 
-              formatter={(value: number) => [value.toFixed(0) + ' m', 'Elevation']}
-              labelFormatter={(value: number) => `Distance: ${value.toFixed(1)} km`}
             />
             <Area 
               type="monotone" 

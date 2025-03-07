@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxdata="http://www.cluetrust.com/XML/GPXDATA/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.cluetrust.com/XML/GPXDATA/1/0 http://www.cluetrust.com/Schemas/gpxdata10.xsd" version="1.1" creator="http://ridewithgps.com/">
+  <metadata>
+    <name>Ferry TF-EH</name>
+    <link href="https://ridewithgps.com/routes/44931232">
+      <text>Ferry TF-EH</text>
+    </link>
+    <time>2023-11-07T17:24:36Z</time>
+  </metadata>
+  <trk>
+    <name>Ferry TF-EH</name>
+    <trkseg>
+      <trkpt lat="28.047702" lon="-16.718388">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.045945" lon="-16.715298">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.043197" lon="-16.715916">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="28.039689" lon="-16.723205">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="27.973528" lon="-16.915472">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="27.806876" lon="-17.711327">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="27.797903" lon="-17.770003">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="27.778274" lon="-17.903143">
+        <ele>0.0</ele>
+      </trkpt>
+      <trkpt lat="27.782204" lon="-17.901372">
+        <ele>0.0</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
