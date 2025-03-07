@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TrailCast - Page Not Found</title>
+  <script>
+    // Single Page Apps for GitHub Pages
+    // MIT License
+    // Handles redirects for GitHub Pages SPA
+    (function() {
+      var path = window.location.pathname;
+      var basePath = '/trailcast/';
+      
+      // If this page is called directly, redirect to the proper index page
+      if (path.indexOf(basePath) === 0) {
+        window.location.replace(
+          window.location.protocol + '//' + 
+          window.location.hostname + 
+          basePath + 
+          '?p=' + 
+          path.slice(basePath.length)
+        );
+      } else {
+        window.location.replace(
+          window.location.protocol + '//' + 
+          window.location.hostname + 
+          basePath
+        );
+      }
+    })();
+  </script>
+</head>
+<body>
+  <h1>Page Not Found</h1>
+  <p>You will be redirected to the TrailCast homepage...</p>
+</body>
+</html>
