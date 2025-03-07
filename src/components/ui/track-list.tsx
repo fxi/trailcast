@@ -18,7 +18,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 interface TrackListProps {
@@ -36,22 +35,6 @@ export function TrackList({
 }: TrackListProps) {
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  
-  // Toggle selection for a track
-  const toggleTrackSelection = (trackId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    setSelectedTracks(prev => {
-      const newSelection = new Set(prev);
-      if (newSelection.has(trackId)) {
-        newSelection.delete(trackId);
-      } else {
-        newSelection.add(trackId);
-      }
-      return newSelection;
-    });
-  };
   
   // Select or deselect all tracks
   const toggleSelectAll = () => {
@@ -75,7 +58,7 @@ export function TrackList({
   const confirmDelete = () => {
     // Convert Set to Array and send all track IDs at once
     const trackIdsToDelete = Array.from(selectedTracks);
-    onDeleteTrack(trackIdsToDelete);
+    onDeleteTrack(trackIdsToDelete as unknown as string);
     setSelectedTracks(new Set());
     setShowDeleteConfirm(false);
   };
