@@ -10,7 +10,7 @@ interface TrackProfileProps {
 
 export function TrackProfile({ track, onCursorChange }: TrackProfileProps) {
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
-  const [profileData, setProfileData] = useState<Array<{distance: number; elevation: number}>>([]);
+  const [profileData, setProfileData] = useState<Array<{distance: number; elevation: number; original: GpxPoint}>>([]);
   
   useEffect(() => {
     if (!track) {

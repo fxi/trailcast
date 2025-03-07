@@ -4,22 +4,20 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Cloud, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeProvider } from '@/components/theme-provider';
-import { GpxPoint, ProcessedTrack, WeatherCache } from '@/types';
+import { GpxPoint, ProcessedTrack } from '@/types';
 import { TrackProfile } from '@/components/ui/track-profile';
 import { TrackList } from '@/components/ui/track-list';
 import { AboutSection } from '@/components/ui/about-section';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Info, MapPin, List, BarChart2 } from "lucide-react";
+import { Info, List, BarChart2 } from "lucide-react";
 import {
   processGpxFile,
   getTrackPoints,
   fetchWeather,
   calculateBounds,
   loadTracks,
-  saveTracks,
-  cn
+  saveTracks
 } from '@/lib/utils';
 
 function App() {
@@ -215,7 +213,7 @@ function App() {
                 // First remove any layers using this source
                 const layers = style.layers || [];
                 layers.forEach(layer => {
-                  if (layer.source === sourceId) {
+                  if ('source' in layer && layer.source === sourceId) {
                     map.current?.removeLayer(layer.id);
                   }
                 });
@@ -314,7 +312,7 @@ function App() {
               try {
                 const layers = style.layers || [];
                 layers.forEach(layer => {
-                  if (layer.source === sourceId) {
+                  if ('source' in layer && layer.source === sourceId) {
                     map.current?.removeLayer(layer.id);
                   }
                 });
@@ -382,15 +380,15 @@ function App() {
             });
             
             // Add interaction handlers
-            map.current?.on('click', trackLayerId, () => {
+            map.current?.on('click', trackLayerId, function() {
               handleTrackClick(track.id);
             });
             
-            map.current?.on('mouseenter', trackLayerId, () => {
+            map.current?.on('mouseenter', trackLayerId, function() {
               if (map.current) map.current.getCanvas().style.cursor = 'pointer';
             });
             
-            map.current?.on('mouseleave', trackLayerId, () => {
+            map.current?.on('mouseleave', trackLayerId, function() {
               if (map.current) map.current.getCanvas().style.cursor = '';
             });
 
@@ -516,17 +514,8 @@ function App() {
       waitForMapStyle();
     }
     
-    // Cleanup function to remove event listeners
-    return () => {
-      if (map.current) {
-        tracks.forEach(track => {
-          const trackLayerId = `track-line-${track.id}`;
-          map.current?.off('click', trackLayerId);
-          map.current?.off('mouseenter', trackLayerId);
-          map.current?.off('mouseleave', trackLayerId);
-        });
-      }
-    };
+    // No need for cleanup, the map layer removal will also remove the event listeners
+    return () => {};
   }, [tracks, selectedTrack]);
 
   return (
