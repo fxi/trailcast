@@ -179,6 +179,12 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return R * c; // Distance in km
 }
 
+
+function getTomorrowDate() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().split('T')[0];
+}
 export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
   // First check cache
   const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}`;
@@ -190,23 +196,8 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherDat
   
   // If not in cache, fetch from API
   const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max`
-  );
-  const data = await response.json();
-  
-  const weatherData = {
-    temperature_2m_max: data.daily.temperature_2m_max[0],
-    temperature_2m_min: data.daily.temperature_2m_min[0],
-    precipitation_probability_max: data.daily.precipitation_probability_max[0],
-    time: new Date().toISOString(),
-  };
-  
-  // Store in cache
-  storeWeatherInCache(cacheKey, weatherData);
-  
-  return weatherData;
-}
-
+  `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&start_date=${getTomorrowDate()}`
+);
 // Cache weather data in localStorage
 export function storeWeatherInCache(key: string, data: WeatherData): void {
   try {
