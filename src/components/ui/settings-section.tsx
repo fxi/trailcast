@@ -33,10 +33,10 @@ export function SettingsSection({ settings, onChange }: SettingsSectionProps) {
         <label className="block text-sm font-medium mb-1">Hourly margin (h)</label>
         <Input
           type="number"
-          min={0}
+          min={2}
           value={settings.hourlyMargin}
           onChange={(e) =>
-            onChange({ ...settings, hourlyMargin: parseInt(e.target.value) || 0 })
+            onChange({ ...settings, hourlyMargin: Math.max(2, parseInt(e.target.value) || 0) })
           }
         />
       </div>

@@ -526,13 +526,17 @@ function App() {
                 const weatherPointsData = {
                   type: 'FeatureCollection',
                   features: sampledPoints.map((point, idx) => {
-                    const weather = track.weatherData![idx];
+                    const weather = track.weatherData ? track.weatherData[idx] : undefined;
                     const hours = (point.distance || 0) / settings.averageSpeed;
                     const arr = new Date(startTs + hours * 3600 * 1000);
                     const labelTime = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const labelTemp = settings.hourlyMargin > 0
+                    const labelTemp = weather && settings.hourlyMargin > 0 &&
+                      weather.temperature_2m_min !== undefined &&
+                      weather.temperature_2m_max !== undefined
                       ? `${weather.temperature_2m_min.toFixed(1)}-${weather.temperature_2m_max.toFixed(1)}°C`
-                      : `~${weather.temperature.toFixed(1)}°C`;
+                      : weather && weather.temperature !== undefined
+                      ? `~${weather.temperature.toFixed(1)}°C`
+                      : 'N/A';
 
                     return {
                       type: 'Feature',
@@ -541,11 +545,11 @@ function App() {
                         coordinates: [point.lon, point.lat]
                       },
                       properties: {
-                        temperature: weather.temperature.toFixed(1),
-                        temperature_min: weather.temperature_2m_min.toFixed(1),
-                        temperature_max: weather.temperature_2m_max.toFixed(1),
+                        temperature: weather && weather.temperature !== undefined ? weather.temperature.toFixed(1) : '',
+                        temperature_min: weather && weather.temperature_2m_min !== undefined ? weather.temperature_2m_min.toFixed(1) : '',
+                        temperature_max: weather && weather.temperature_2m_max !== undefined ? weather.temperature_2m_max.toFixed(1) : '',
                         labelTemp,
-                        precipitation: weather.precipitation_probability_max,
+                        precipitation: weather ? weather.precipitation_probability_max : 0,
                         arrival: labelTime,
                         trackIndex: trackIndex
                       }
@@ -940,6 +944,7 @@ function App() {
                 <TrackList
                   tracks={tracks}
                   selectedTrackId={selectedTrack?.id}
+                  settings={settings}
                   onSelectTrack={(id) => {
                     const track = tracks.find(t => t.id === id);
                     if (track) {
