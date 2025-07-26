@@ -30,3 +30,8 @@ export interface WeatherCache {
     timestamp: number;
   };
 }
+
+export interface UserSettings {
+  weatherStart: string;
+  averageSpeed: number;
+}
