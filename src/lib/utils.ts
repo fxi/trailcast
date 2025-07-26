@@ -3,7 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import * as toGeoJSON from '@tmcw/togeojson';
 // @ts-ignore - Ignore type issues with bbox
 import bbox from '@turf/bbox';
-import { GpxPoint, WeatherData } from '@/types';
+import { GpxPoint, WeatherData, DailyWeatherData } from '@/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -179,48 +179,66 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return R * c; // Distance in km
 }
 
-export async function fetchWeather(lat: number, lon: number, dateTime: string): Promise<WeatherData> {
-  // First check cache
-  const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}-${dateTime}`;
-  const cachedData = getWeatherFromCache(cacheKey);
-  
-  if (cachedData) {
-    return cachedData;
-  }
-  
-  // If not in cache, fetch from API
+export async function fetchWeather(
+  lat: number,
+  lon: number,
+  dateTime: string,
+  hourlyMargin = 0
+): Promise<WeatherData> {
   const date = dateTime.split('T')[0];
-  const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability&start_date=${date}&end_date=${date}&timezone=UTC`
-  );
-  const data = await response.json();
 
-  const times: string[] = data.hourly.time;
-  const temps: number[] = data.hourly.temperature_2m;
-  const precs: number[] = data.hourly.precipitation_probability;
+  // Check cache using only location and date
+  const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}-${date}`;
+  let daily = getWeatherFromCache(cacheKey);
+
+  if (!daily) {
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability&start_date=${date}&end_date=${date}&timezone=UTC`
+    );
+    const data = await response.json();
+    daily = {
+      time: data.hourly.time,
+      temperature_2m: data.hourly.temperature_2m,
+      precipitation_probability: data.hourly.precipitation_probability,
+    };
+    storeWeatherInCache(cacheKey, daily);
+  }
+
+  const times: string[] = daily.time;
+  const temps: number[] = daily.temperature_2m;
+  const precs: number[] = daily.precipitation_probability;
 
   const dt = new Date(dateTime);
-  dt.setMinutes(0,0,0);
-  const hourIso = dt.toISOString().slice(0,13);
+  dt.setMinutes(0, 0, 0);
+  const hourIso = dt.toISOString().slice(0, 13);
   const idx = times.findIndex((t) => t.startsWith(hourIso));
-  const temp = idx >= 0 ? temps[idx] : temps[0];
-  const prec = idx >= 0 ? precs[idx] : precs[0];
+
+  const index = idx >= 0 ? idx : 0;
+  const start = Math.max(0, index - hourlyMargin);
+  const end = Math.min(times.length - 1, index + hourlyMargin);
+
+  const rangeTemps = temps.slice(start, end + 1);
+  const rangePrecs = precs.slice(start, end + 1);
+
+  const temp = temps[index];
+  const tempMin = Math.min(...rangeTemps);
+  const tempMax = Math.max(...rangeTemps);
+  const prec = Math.max(...rangePrecs);
 
   const weatherData = {
-    temperature_2m_max: temp,
-    temperature_2m_min: temp,
+    temperature: temp,
+    temperature_2m_max: tempMax,
+    temperature_2m_min: tempMin,
     precipitation_probability_max: prec,
     time: dt.toISOString(),
   };
-  
-  // Store in cache
-  storeWeatherInCache(cacheKey, weatherData);
-  
+
   return weatherData;
 }
 
 // Cache weather data in localStorage
-export function storeWeatherInCache(key: string, data: WeatherData): void {
+
+export function storeWeatherInCache(key: string, data: DailyWeatherData): void {
   try {
     const weatherCache = getWeatherCache();
     
@@ -236,7 +254,7 @@ export function storeWeatherInCache(key: string, data: WeatherData): void {
 }
 
 // Get cached weather data if it exists and is not expired
-export function getWeatherFromCache(key: string): WeatherData | null {
+export function getWeatherFromCache(key: string): DailyWeatherData | null {
   try {
     const weatherCache = getWeatherCache();
     const cached = weatherCache[key];
@@ -258,7 +276,7 @@ export function getWeatherFromCache(key: string): WeatherData | null {
 }
 
 // Get the entire weather cache
-export function getWeatherCache(): Record<string, { data: WeatherData; timestamp: number }> {
+export function getWeatherCache(): Record<string, { data: DailyWeatherData; timestamp: number }> {
   try {
     const cached = localStorage.getItem('weather-cache');
     return cached ? JSON.parse(cached) : {};
@@ -304,12 +322,13 @@ export function loadSettings(): import('../types').UserSettings {
       return {
         weatherStart: parsed.weatherStart || new Date().toISOString(),
         averageSpeed: parsed.averageSpeed ?? 18,
+        hourlyMargin: parsed.hourlyMargin ?? 0,
       };
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
-  return { weatherStart: new Date().toISOString(), averageSpeed: 18 };
+  return { weatherStart: new Date().toISOString(), averageSpeed: 18, hourlyMargin: 0 };
 }
 
 export function calculateBounds(points: GpxPoint[]) {

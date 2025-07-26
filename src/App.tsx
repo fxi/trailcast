@@ -110,7 +110,9 @@ function App() {
               : sampledPoints;
 
             const weatherData = await Promise.all(
-              weatherPoints.map(pt => fetchWeather(pt.lat, pt.lon, settings.weatherStart))
+              weatherPoints.map(pt =>
+                fetchWeather(pt.lat, pt.lon, settings.weatherStart, settings.hourlyMargin)
+              )
             );
 
             return {
@@ -163,7 +165,9 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
+            sampledPoints.map(point =>
+              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
+            )
           );
 
           return {
@@ -234,7 +238,9 @@ function App() {
             : sampledPoints;
 
           const weatherData = await Promise.all(
-            weatherPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
+            weatherPoints.map(point =>
+              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
+            )
           );
 
           return {
@@ -524,6 +530,10 @@ function App() {
                     const hours = (point.distance || 0) / settings.averageSpeed;
                     const arr = new Date(startTs + hours * 3600 * 1000);
                     const labelTime = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const labelTemp = settings.hourlyMargin > 0
+                      ? `${weather.temperature_2m_min.toFixed(1)}-${weather.temperature_2m_max.toFixed(1)}°C`
+                      : `~${weather.temperature.toFixed(1)}°C`;
+
                     return {
                       type: 'Feature',
                       geometry: {
@@ -531,8 +541,10 @@ function App() {
                         coordinates: [point.lon, point.lat]
                       },
                       properties: {
+                        temperature: weather.temperature.toFixed(1),
                         temperature_min: weather.temperature_2m_min.toFixed(1),
                         temperature_max: weather.temperature_2m_max.toFixed(1),
+                        labelTemp,
                         precipitation: weather.precipitation_probability_max,
                         arrival: labelTime,
                         trackIndex: trackIndex
@@ -590,7 +602,7 @@ function App() {
                     'text-field': [
                       'concat',
                       ['get', 'arrival'], '\n',
-                      ['get', 'temperature_min'], '-', ['get', 'temperature_max'], '°C\n',
+                      ['get', 'labelTemp'], '\n',
                       ['get', 'precipitation'], '% rain'
                     ],
                     'text-font': ['Open Sans Regular'],
@@ -674,7 +686,9 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
+            sampledPoints.map(point =>
+              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
+            )
           );
 
           // Extract file name without extension and path
