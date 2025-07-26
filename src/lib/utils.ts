@@ -179,9 +179,9 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return R * c; // Distance in km
 }
 
-export async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
+export async function fetchWeather(lat: number, lon: number, dateTime: string): Promise<WeatherData> {
   // First check cache
-  const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}`;
+  const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}-${dateTime}`;
   const cachedData = getWeatherFromCache(cacheKey);
   
   if (cachedData) {
@@ -189,16 +189,28 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherDat
   }
   
   // If not in cache, fetch from API
+  const date = dateTime.split('T')[0];
   const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max`
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability&start_date=${date}&end_date=${date}&timezone=UTC`
   );
   const data = await response.json();
-  
+
+  const times: string[] = data.hourly.time;
+  const temps: number[] = data.hourly.temperature_2m;
+  const precs: number[] = data.hourly.precipitation_probability;
+
+  const dt = new Date(dateTime);
+  dt.setMinutes(0,0,0);
+  const hourIso = dt.toISOString().slice(0,13);
+  const idx = times.findIndex((t) => t.startsWith(hourIso));
+  const temp = idx >= 0 ? temps[idx] : temps[0];
+  const prec = idx >= 0 ? precs[idx] : precs[0];
+
   const weatherData = {
-    temperature_2m_max: data.daily.temperature_2m_max[0],
-    temperature_2m_min: data.daily.temperature_2m_min[0],
-    precipitation_probability_max: data.daily.precipitation_probability_max[0],
-    time: new Date().toISOString(),
+    temperature_2m_max: temp,
+    temperature_2m_min: temp,
+    precipitation_probability_max: prec,
+    time: dt.toISOString(),
   };
   
   // Store in cache
@@ -274,6 +286,30 @@ export function loadTracks(): any[] {
     console.error('Error loading tracks:', error);
     return [];
   }
+}
+
+export function saveSettings(settings: import('../types').UserSettings): void {
+  try {
+    localStorage.setItem('user-settings', JSON.stringify(settings));
+  } catch (error) {
+    console.error('Error saving settings:', error);
+  }
+}
+
+export function loadSettings(): import('../types').UserSettings {
+  try {
+    const saved = localStorage.getItem('user-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        weatherStart: parsed.weatherStart || new Date().toISOString(),
+        averageSpeed: parsed.averageSpeed ?? 18,
+      };
+    }
+  } catch (error) {
+    console.error('Error loading settings:', error);
+  }
+  return { weatherStart: new Date().toISOString(), averageSpeed: 18 };
 }
 
 export function calculateBounds(points: GpxPoint[]) {

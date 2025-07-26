@@ -4,13 +4,14 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Cloud, RefreshCw, Trash2, Upload, ChevronUp, ChevronDown, ZoomIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeProvider } from '@/components/theme-provider';
-import { GpxPoint, ProcessedTrack } from '@/types';
+import { GpxPoint, ProcessedTrack, UserSettings } from '@/types';
 import { TrackProfile } from '@/components/ui/track-profile';
 import { TrackList } from '@/components/ui/track-list';
 import { AboutSection } from '@/components/ui/about-section';
+import { SettingsSection } from '@/components/ui/settings-section';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Info, List, BarChart2 } from "lucide-react";
+import { Info, List, BarChart2, Settings as SettingsIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog,
@@ -28,7 +29,9 @@ import {
   fetchWeather,
   calculateBounds,
   loadTracks,
-  saveTracks
+  saveTracks,
+  loadSettings,
+  saveSettings
 } from '@/lib/utils';
 
 function App() {
@@ -41,7 +44,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [showDemoDialog, setShowDemoDialog] = useState(false);
-  
+  const [settings, setSettings] = useState<UserSettings>(loadSettings());
+
   // Load saved tracks from localStorage when the app starts
   useEffect(() => {
     const savedTracks = loadTracks();
@@ -87,6 +91,52 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    if (!tracks.length) return;
+
+    const refresh = async () => {
+      setLoading(true);
+      try {
+        const timestamp = Date.now();
+        const updated = await Promise.all(
+          tracks.map(async (track) => {
+            const sampledPoints = track.sampledPoints || getTrackPoints(track.points);
+            const weatherPoints = sampledPoints.length > 10
+              ? [sampledPoints[0], ...sampledPoints.slice(1, sampledPoints.length - 1).slice(0, 8), sampledPoints[sampledPoints.length - 1]]
+              : sampledPoints;
+
+            const weatherData = await Promise.all(
+              weatherPoints.map(pt => fetchWeather(pt.lat, pt.lon, settings.weatherStart))
+            );
+
+            return {
+              ...track,
+              sampledPoints: weatherPoints,
+              weatherData,
+              weatherFetchedAt: timestamp,
+              updatedAt: timestamp
+            };
+          })
+        );
+        setTracks(updated);
+        saveTracks(updated);
+
+        if (selectedTrack) {
+          const updatedSelected = updated.find(t => t.id === selectedTrack.id);
+          if (updatedSelected) setSelectedTrack(updatedSelected);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    refresh();
+  }, [settings.weatherStart]);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
@@ -113,7 +163,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
           );
 
           return {
@@ -184,7 +234,7 @@ function App() {
             : sampledPoints;
 
           const weatherData = await Promise.all(
-            weatherPoints.map(point => fetchWeather(point.lat, point.lon))
+            weatherPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
           );
 
           return {
@@ -466,10 +516,14 @@ function App() {
                 const weatherLabelId = `weather-label-${track.id}`;
                 
                 // Create weather point data
+                const startTs = new Date(settings.weatherStart).getTime();
                 const weatherPointsData = {
                   type: 'FeatureCollection',
                   features: sampledPoints.map((point, idx) => {
                     const weather = track.weatherData![idx];
+                    const hours = (point.distance || 0) / settings.averageSpeed;
+                    const arr = new Date(startTs + hours * 3600 * 1000);
+                    const labelTime = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     return {
                       type: 'Feature',
                       geometry: {
@@ -480,6 +534,7 @@ function App() {
                         temperature_min: weather.temperature_2m_min.toFixed(1),
                         temperature_max: weather.temperature_2m_max.toFixed(1),
                         precipitation: weather.precipitation_probability_max,
+                        arrival: labelTime,
                         trackIndex: trackIndex
                       }
                     };
@@ -534,11 +589,12 @@ function App() {
                   layout: {
                     'text-field': [
                       'concat',
+                      ['get', 'arrival'], '\n',
                       ['get', 'temperature_min'], '-', ['get', 'temperature_max'], '°C\n',
                       ['get', 'precipitation'], '% rain'
                     ],
                     'text-font': ['Open Sans Regular'],
-                    'text-size': 12,
+                    'text-size': 14,
                     'text-anchor': 'top',
                     'text-offset': [0, 1]
                   },
@@ -581,7 +637,7 @@ function App() {
     
     // No need for cleanup, the map layer removal will also remove the event listeners
     return () => {};
-  }, [tracks, selectedTrack]);
+  }, [tracks, selectedTrack, settings]);
 
   // Handle loading demo GPX data
   const loadDemoData = async () => {
@@ -618,7 +674,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.weatherStart))
           );
 
           // Extract file name without extension and path
@@ -841,6 +897,10 @@ function App() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="settings" className="flex items-center gap-1">
+                  <SettingsIcon className="w-4 h-4" />
+                  <span className="md:inline hidden">Settings</span>
+                </TabsTrigger>
                 <TabsTrigger value="about" className="flex items-center gap-1">
                   <Info className="w-4 h-4" />
                   <span className="md:inline hidden">About</span>
@@ -863,7 +923,7 @@ function App() {
               </TabsContent>
               
               <TabsContent value="tracks" className="m-0 h-full">
-                <TrackList 
+                <TrackList
                   tracks={tracks}
                   selectedTrackId={selectedTrack?.id}
                   onSelectTrack={(id) => {
@@ -876,7 +936,11 @@ function App() {
                   onDeleteTrack={handleDeleteTrack}
                 />
               </TabsContent>
-              
+
+              <TabsContent value="settings" className="m-0 h-full">
+                <SettingsSection settings={settings} onChange={setSettings} />
+              </TabsContent>
+
               <TabsContent value="about" className="m-0 h-full">
                 <AboutSection />
               </TabsContent>
