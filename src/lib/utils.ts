@@ -3,7 +3,8 @@ import { twMerge } from 'tailwind-merge';
 import * as toGeoJSON from '@tmcw/togeojson';
 // @ts-ignore - Ignore type issues with bbox
 import bbox from '@turf/bbox';
-import { GpxPoint, WeatherData, DailyWeatherData } from '@/types';
+import { GpxPoint, WeatherData, DailyWeatherData, ProcessedTrack, UserSettings } from '@/types';
+import { jsPDF } from 'jspdf';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -183,7 +184,7 @@ export async function fetchWeather(
   lat: number,
   lon: number,
   dateTime: string,
-  hourlyMargin = 0
+  hourlyMargin = 3
 ): Promise<WeatherData> {
   const date = dateTime.split('T')[0];
 
@@ -322,13 +323,13 @@ export function loadSettings(): import('../types').UserSettings {
       return {
         weatherStart: parsed.weatherStart || new Date().toISOString(),
         averageSpeed: parsed.averageSpeed ?? 18,
-        hourlyMargin: parsed.hourlyMargin ?? 0,
+        hourlyMargin: Math.max(2, parsed.hourlyMargin ?? 3),
       };
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
-  return { weatherStart: new Date().toISOString(), averageSpeed: 18, hourlyMargin: 0 };
+  return { weatherStart: new Date().toISOString(), averageSpeed: 18, hourlyMargin: 3 };
 }
 
 export function calculateBounds(points: GpxPoint[]) {
@@ -341,4 +342,43 @@ export function calculateBounds(points: GpxPoint[]) {
       coordinates
     }
   });
+}
+
+export function exportWeatherPdf(
+  track: ProcessedTrack,
+  settings: UserSettings,
+  title: string
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+  doc.setFontSize(16);
+  doc.text(title, 40, 40);
+  doc.setFontSize(12);
+
+  const startTs = new Date(settings.weatherStart).getTime();
+  let y = 80;
+  track.sampledPoints?.forEach((point, idx) => {
+    const weather = track.weatherData?.[idx];
+    if (!weather) return;
+    const hours = (point.distance || 0) / settings.averageSpeed;
+    const arr = new Date(startTs + hours * 3600 * 1000);
+    const arrival = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const altitude = point.ele != null ? `${point.ele.toFixed(0)} m` : 'N/A';
+    const rain = `${weather.precipitation_probability_max}%`;
+    const temp = settings.hourlyMargin > 0
+      ? `${weather.temperature_2m_min.toFixed(1)}-${weather.temperature_2m_max.toFixed(1)}°C`
+      : `~${weather.temperature.toFixed(1)}°C`;
+
+    doc.text(`ETA: ${arrival}`, 40, y);
+    doc.text(`Alt: ${altitude}`, 160, y);
+    doc.text(`Rain: ${rain}`, 240, y);
+    doc.text(`Temp: ${temp}`, 340, y);
+    y += 20;
+    if (y > 780) {
+      doc.addPage();
+      y = 40;
+    }
+  });
+
+  doc.save(`${title}.pdf`);
 }

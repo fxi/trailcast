@@ -1,15 +1,15 @@
-import { useState } from "react";
-import { ProcessedTrack } from "@/types";
+import { useEffect, useState } from "react";
+import { ProcessedTrack, UserSettings } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Trash2, MapIcon, Clock, Download, CheckCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { calculateDistance } from "@/lib/utils";
+import { calculateDistance, exportWeatherPdf } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 // Download feature will be implemented later
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -19,22 +19,49 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter as DialogFooterBase,
+  DialogHeader as DialogHeaderBase,
+  DialogTitle as DialogTitleBase,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface TrackListProps {
   tracks: ProcessedTrack[];
   selectedTrackId?: string;
   onSelectTrack: (trackId: string) => void;
   onDeleteTrack: (trackId: string) => void;
+  settings: UserSettings;
 }
 
 export function TrackList({ 
   tracks, 
   selectedTrackId, 
   onSelectTrack, 
-  onDeleteTrack 
+  onDeleteTrack,
+  settings
 }: TrackListProps) {
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportTitle, setExportTitle] = useState("");
+
+  // Update default title when dialog opens
+  useEffect(() => {
+    if (showExportDialog && selectedTracks.size > 0) {
+      const firstId = Array.from(selectedTracks)[0];
+      const track = tracks.find(t => t.id === firstId);
+      if (track) {
+        const name = track.name || "Track";
+        setExportTitle(
+          `TrailCast - ${new Date().toLocaleDateString()} - ${name}`
+        );
+      }
+    }
+  }, [showExportDialog, selectedTracks, tracks]);
   
   // Select or deselect all tracks
   const toggleSelectAll = () => {
@@ -63,9 +90,19 @@ export function TrackList({
     setShowDeleteConfirm(false);
   };
   
-  // Placeholder for the download feature
   const handleDownload = () => {
-    alert("Export feature will be available in a future update. Stay tuned!");
+    if (selectedTracks.size > 0) {
+      setShowExportDialog(true);
+    }
+  };
+
+  const confirmExport = () => {
+    const firstId = Array.from(selectedTracks)[0];
+    const track = tracks.find(t => t.id === firstId);
+    if (track) {
+      exportWeatherPdf(track, settings, exportTitle);
+    }
+    setShowExportDialog(false);
   };
 
   if (tracks.length === 0) {
@@ -236,6 +273,27 @@ export function TrackList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Export dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeaderBase>
+            <DialogTitleBase>Export Cue Sheet</DialogTitleBase>
+          </DialogHeaderBase>
+          <div className="space-y-4">
+            <Input
+              value={exportTitle}
+              onChange={(e) => setExportTitle(e.target.value)}
+            />
+          </div>
+          <DialogFooterBase>
+            <DialogClose asChild>
+              <Button variant="secondary">Cancel</Button>
+            </DialogClose>
+            <Button onClick={confirmExport}>Export</Button>
+          </DialogFooterBase>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
