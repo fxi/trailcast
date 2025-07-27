@@ -287,8 +287,17 @@ export function getWeatherCache(): Record<string, { data: DailyWeatherData; time
   }
 }
 
+// Clear the entire weather cache
+export function clearWeatherCache(): void {
+  try {
+    localStorage.removeItem('weather-cache');
+  } catch (error) {
+    console.error('Error clearing weather cache:', error);
+  }
+}
+
 // Save tracks to localStorage
-export function saveTracks(tracks: any[]): void {
+export function saveTracks(tracks: ProcessedTrack[]): void {
   try {
     localStorage.setItem('saved-tracks', JSON.stringify(tracks));
   } catch (error) {
@@ -297,10 +306,10 @@ export function saveTracks(tracks: any[]): void {
 }
 
 // Load tracks from localStorage
-export function loadTracks(): any[] {
+export function loadTracks(): ProcessedTrack[] {
   try {
     const saved = localStorage.getItem('saved-tracks');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? JSON.parse(saved) as ProcessedTrack[] : [];
   } catch (error) {
     console.error('Error loading tracks:', error);
     return [];

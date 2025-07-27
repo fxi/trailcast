@@ -31,13 +31,15 @@ import {
   loadTracks,
   saveTracks,
   loadSettings,
-  saveSettings
+  saveSettings,
+  clearWeatherCache
 } from '@/lib/utils';
 
 function App() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const cursorMarker = useRef<maplibregl.Marker | null>(null);
+  const initialZoomDone = useRef(false);
   const [tracks, setTracks] = useState<ProcessedTrack[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<ProcessedTrack | null>(null);
   const [activeTab, setActiveTab] = useState<string>("profile");
@@ -45,6 +47,13 @@ function App() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [showDemoDialog, setShowDemoDialog] = useState(false);
   const [settings, setSettings] = useState<UserSettings>(loadSettings());
+
+  // Select first track by default when none is selected
+  useEffect(() => {
+    if (tracks.length > 0 && !selectedTrack) {
+      setSelectedTrack(tracks[0]);
+    }
+  }, [tracks, selectedTrack]);
 
   // Load saved tracks from localStorage when the app starts
   useEffect(() => {
@@ -59,17 +68,6 @@ function App() {
       }));
       setTracks(validatedTracks);
       
-      // Zoom to the extent of all tracks
-      if (map.current) {
-        const allPoints = validatedTracks.flatMap(track => track.points);
-        if (allPoints.length) {
-          const bounds = calculateBounds(allPoints);
-          map.current.fitBounds(
-            [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
-            { padding: 50, duration: 1000 }
-          );
-        }
-      }
     } else {
       // If no tracks, show demo data dialog
       setShowDemoDialog(true);
@@ -90,6 +88,33 @@ function App() {
       map.current?.remove();
     };
   }, []);
+
+  // Perform initial zoom once the map is ready
+  useEffect(() => {
+    if (!map.current || initialZoomDone.current || tracks.length === 0) return;
+
+    const zoomAll = () => {
+      if (!map.current || initialZoomDone.current) return;
+      const allPoints = tracks.flatMap(t => t.points);
+      if (allPoints.length) {
+        const bounds = calculateBounds(allPoints);
+        map.current.fitBounds(
+          [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
+          { padding: 50, duration: 1000 }
+        );
+        initialZoomDone.current = true;
+      }
+    };
+
+    if (map.current.isStyleLoaded()) {
+      zoomAll();
+    } else {
+      map.current.once('load', zoomAll);
+      return () => {
+        map.current?.off('load', zoomAll);
+      };
+    }
+  }, [tracks]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -213,18 +238,11 @@ function App() {
   const handleRefresh = async () => {
     setLoading(true);
     try {
+      clearWeatherCache();
       const timestamp = Date.now();
-      
+
       const updatedTracks = await Promise.all(
         tracks.map(async (track) => {
-          // Check if weather data needs refresh (older than 12 hours)
-          const needsRefresh = !track.weatherFetchedAt || 
-            (timestamp - track.weatherFetchedAt > 12 * 60 * 60 * 1000);
-            
-          if (!needsRefresh) {
-            return track; // Skip if weather data is fresh enough
-          }
-          
           // Use the existing sampledPoints if available, or generate them
           const sampledPoints = track.sampledPoints || getTrackPoints(track.points);
           
@@ -310,12 +328,8 @@ function App() {
           });
         }
         
-        // Reset the map view
-        map.current.flyTo({ center: [0, 0], zoom: 1 });
       } catch (error) {
         console.error("Error clearing map:", error);
-        // As a fallback, just reset the view
-        map.current.flyTo({ center: [0, 0], zoom: 1 });
       }
     }
   };
@@ -927,7 +941,7 @@ function App() {
               
               {tracks.length > 0 && selectedTrack?.weatherData && (
                 <div className="text-xs text-muted-foreground mr-2">
-                  Weather data from: {new Date(selectedTrack.weatherFetchedAt || Date.now()).toLocaleDateString()}
+                  Weather data from: {new Date(selectedTrack.weatherFetchedAt || Date.now()).toLocaleString()}
                 </div>
               )}
             </div>

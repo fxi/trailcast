@@ -33,7 +33,7 @@ interface TrackListProps {
   tracks: ProcessedTrack[];
   selectedTrackId?: string;
   onSelectTrack: (trackId: string) => void;
-  onDeleteTrack: (trackId: string) => void;
+  onDeleteTrack: (trackId: string | string[]) => void;
   settings: UserSettings;
 }
 
@@ -85,7 +85,7 @@ export function TrackList({
   const confirmDelete = () => {
     // Convert Set to Array and send all track IDs at once
     const trackIdsToDelete = Array.from(selectedTracks);
-    onDeleteTrack(trackIdsToDelete as unknown as string);
+    onDeleteTrack(trackIdsToDelete);
     setSelectedTracks(new Set());
     setShowDeleteConfirm(false);
   };
