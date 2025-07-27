@@ -33,8 +33,7 @@ import {
   saveTracks,
   loadSettings,
   saveSettings,
-  clearWeatherCache,
-  windArrow
+  clearWeatherCache
 } from '@/lib/utils';
 
 function App() {
@@ -121,6 +120,15 @@ function App() {
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
+
+  const prevForecastRef = useRef(settings.forecastDate);
+  useEffect(() => {
+    if (tracks.length && prevForecastRef.current !== settings.forecastDate) {
+      handleRefresh();
+    }
+    prevForecastRef.current = settings.forecastDate;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.forecastDate]);
 
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,6 +258,7 @@ function App() {
     setTracks([]);
     setSelectedTrack(null);
     saveTracks([]);
+    clearWeatherCache();
     
     // Remove cursor marker if it exists
     if (cursorMarker.current) {
@@ -311,6 +320,7 @@ function App() {
           const trackLayerId = `track-line-${id}`;
           const weatherSourceId = `weather-${id}`;
           const weatherSpriteId = `weather-sprite-${id}`;
+          const weatherArrowId = `weather-arrow-${id}`;
           const weatherLabelId = `weather-label-${id}`;
           
           // Remove weather layers if they exist
@@ -319,6 +329,9 @@ function App() {
           }
           if (map.current?.getLayer(weatherSpriteId)) {
             map.current.removeLayer(weatherSpriteId);
+          }
+          if (map.current?.getLayer(weatherArrowId)) {
+            map.current.removeLayer(weatherArrowId);
           }
           if (map.current?.getSource(weatherSourceId)) {
             map.current.removeSource(weatherSourceId);
@@ -488,6 +501,7 @@ function App() {
               try {
                 const weatherSourceId = `weather-${track.id}`;
                 const weatherSpriteId = `weather-sprite-${track.id}`;
+                const weatherArrowId = `weather-arrow-${track.id}`;
                 const weatherLabelId = `weather-label-${track.id}`;
                 
                 // Create weather point data
@@ -498,7 +512,8 @@ function App() {
                     const labelTemp = weather
                       ? `${weather.apparent_temperature_min.toFixed(1)}-${weather.apparent_temperature_max.toFixed(1)}°C`
                       : 'N/A';
-                    const labelWind = weather ? `${weather.wind_speed_10m_max.toFixed(0)} km/h ${windArrow(weather.wind_direction_10m_dominant)}` : '';
+                    const labelWind = weather ? `${weather.wind_speed_10m_max.toFixed(0)} km/h` : '';
+                    const windBearing = weather ? weather.wind_direction_10m_dominant : 0;
                     const labelRain = weather ? `${weather.rain_sum.toFixed(1)} mm` : '';
 
                     return {
@@ -511,6 +526,7 @@ function App() {
                         labelTemp,
                         wind: labelWind,
                         rain: labelRain,
+                        windBearing,
                         trackIndex: trackIndex
                       }
                     };
@@ -521,6 +537,9 @@ function App() {
                 if (map.current?.getSource(weatherSourceId)) {
                   if (map.current.getLayer(weatherLabelId)) {
                     map.current.removeLayer(weatherLabelId);
+                  }
+                  if (map.current.getLayer(weatherArrowId)) {
+                    map.current.removeLayer(weatherArrowId);
                   }
                   if (map.current.getLayer(weatherSpriteId)) {
                     map.current.removeLayer(weatherSpriteId);
@@ -554,6 +573,26 @@ function App() {
                     'circle-opacity': 0.7,
                     'circle-stroke-width': 2,
                     'circle-stroke-color': '#ffffff'
+                  }
+                });
+
+                // Add wind direction arrows
+                map.current?.addLayer({
+                  id: weatherArrowId,
+                  type: 'symbol',
+                  source: weatherSourceId,
+                  layout: {
+                    'text-field': '↑',
+                    'text-size': 18,
+                    'text-anchor': 'center',
+                    'text-rotate': ['get', 'windBearing'],
+                    'text-rotation-alignment': 'map',
+                    'text-font': ['Open Sans Regular']
+                  },
+                  paint: {
+                    'text-color': '#000',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 2
                   }
                 });
 
