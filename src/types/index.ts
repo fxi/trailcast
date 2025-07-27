@@ -50,5 +50,6 @@ export interface WeatherCache {
 }
 
 export interface UserSettings {
-  // Intentionally left blank for future preferences
+  /** ISO date (YYYY-MM-DD) for weather forecast */
+  forecastDate: string;
 }

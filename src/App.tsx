@@ -33,7 +33,8 @@ import {
   saveTracks,
   loadSettings,
   saveSettings,
-  clearWeatherCache
+  clearWeatherCache,
+  windArrow
 } from '@/lib/utils';
 
 function App() {
@@ -148,7 +149,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.forecastDate))
           );
 
           return {
@@ -212,7 +213,7 @@ function App() {
             : sampledPoints;
 
           const weatherData = await Promise.all(
-            weatherPoints.map(point => fetchWeather(point.lat, point.lon))
+            weatherPoints.map(point => fetchWeather(point.lat, point.lon, settings.forecastDate))
           );
 
           return {
@@ -497,7 +498,7 @@ function App() {
                     const labelTemp = weather
                       ? `${weather.apparent_temperature_min.toFixed(1)}-${weather.apparent_temperature_max.toFixed(1)}°C`
                       : 'N/A';
-                    const labelWind = weather ? `${weather.wind_speed_10m_max.toFixed(0)} km/h` : '';
+                    const labelWind = weather ? `${weather.wind_speed_10m_max.toFixed(0)} km/h ${windArrow(weather.wind_direction_10m_dominant)}` : '';
                     const labelRain = weather ? `${weather.rain_sum.toFixed(1)} mm` : '';
 
                     return {
@@ -649,7 +650,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon, settings.forecastDate))
           );
 
           // Extract file name without extension and path
