@@ -624,14 +624,14 @@ function App() {
                       ['get', 'precipitation'], '% rain'
                     ],
                     'text-font': ['Open Sans Regular'],
-                    'text-size': 14,
+                    'text-size': 15,
                     'text-anchor': 'top',
                     'text-offset': [0, 1]
                   },
                   paint: {
-                    'text-color': '#ffffff',
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 1
+                    'text-color': '#000',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 2
                   }
                 });
               } catch (error) {
