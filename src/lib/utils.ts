@@ -182,16 +182,16 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
 
 export async function fetchWeather(
   lat: number,
-  lon: number
+  lon: number,
+  date: string = new Date().toISOString().split('T')[0]
 ): Promise<WeatherData> {
-  const date = new Date().toISOString().split('T')[0];
 
   const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}-${date}`;
   let daily = getWeatherFromCache(cacheKey);
 
   if (!daily) {
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,wind_direction_10m_dominant,rain_sum&timezone=auto&forecast_days=1`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&daily=apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,wind_direction_10m_dominant,rain_sum&timezone=auto`
     );
     const data = await response.json();
     daily = {
@@ -305,15 +305,16 @@ export function saveSettings(settings: import('../types').UserSettings): void {
 }
 
 export function loadSettings(): import('../types').UserSettings {
+  const defaults = { forecastDate: new Date().toISOString().split('T')[0] };
   try {
     const saved = localStorage.getItem('user-settings');
     if (saved) {
-      return JSON.parse(saved);
+      return { ...defaults, ...JSON.parse(saved) };
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
-  return {} as import('../types').UserSettings;
+  return defaults as import('../types').UserSettings;
 }
 
 export function calculateBounds(points: GpxPoint[]) {
@@ -359,4 +360,10 @@ export function exportWeatherPdf(
   });
 
   doc.save(`${title}.pdf`);
+}
+
+export function windArrow(deg: number): string {
+  const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+  const idx = Math.round(deg / 45) % 8;
+  return arrows[idx];
 }
