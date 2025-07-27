@@ -1,12 +1,16 @@
 export interface WeatherData {
-  /** Temperature at the selected time */
-  temperature: number;
-  /** Maximum temperature within the hourly margin */
-  temperature_2m_max: number;
-  /** Minimum temperature within the hourly margin */
-  temperature_2m_min: number;
-  precipitation_probability_max: number;
+  /** ISO date for the forecast */
   time: string;
+  /** Maximum apparent temperature for the day */
+  apparent_temperature_max: number;
+  /** Minimum apparent temperature for the day */
+  apparent_temperature_min: number;
+  /** Maximum wind speed */
+  wind_speed_10m_max: number;
+  /** Dominant wind direction in degrees */
+  wind_direction_10m_dominant: number;
+  /** Total rain for the day */
+  rain_sum: number;
 }
 
 export interface GpxPoint {
@@ -29,12 +33,13 @@ export interface ProcessedTrack {
 }
 
 export interface DailyWeatherData {
-  /** Array of ISO timestamps */
+  /** Array with a single ISO date */
   time: string[];
-  /** Temperature forecast for each hour */
-  temperature_2m: number[];
-  /** Precipitation probability for each hour */
-  precipitation_probability: number[];
+  apparent_temperature_max: number[];
+  apparent_temperature_min: number[];
+  wind_speed_10m_max: number[];
+  wind_direction_10m_dominant: number[];
+  rain_sum: number[];
 }
 
 export interface WeatherCache {
@@ -45,8 +50,5 @@ export interface WeatherCache {
 }
 
 export interface UserSettings {
-  weatherStart: string;
-  averageSpeed: number;
-  /** Number of hours before/after the selected time to include in the weather range */
-  hourlyMargin: number;
+  // Intentionally left blank for future preferences
 }

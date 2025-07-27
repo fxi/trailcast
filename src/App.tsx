@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { GpxPoint, ProcessedTrack, UserSettings } from '@/types';
 import { TrackProfile } from '@/components/ui/track-profile';
 import { TrackList } from '@/components/ui/track-list';
+import { WeatherTable } from '@/components/ui/weather-table';
 import { AboutSection } from '@/components/ui/about-section';
 import { SettingsSection } from '@/components/ui/settings-section';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -120,49 +121,6 @@ function App() {
     saveSettings(settings);
   }, [settings]);
 
-  useEffect(() => {
-    if (!tracks.length) return;
-
-    const refresh = async () => {
-      setLoading(true);
-      try {
-        const timestamp = Date.now();
-        const updated = await Promise.all(
-          tracks.map(async (track) => {
-            const sampledPoints = track.sampledPoints || getTrackPoints(track.points);
-            const weatherPoints = sampledPoints.length > 10
-              ? [sampledPoints[0], ...sampledPoints.slice(1, sampledPoints.length - 1).slice(0, 8), sampledPoints[sampledPoints.length - 1]]
-              : sampledPoints;
-
-            const weatherData = await Promise.all(
-              weatherPoints.map(pt =>
-                fetchWeather(pt.lat, pt.lon, settings.weatherStart, settings.hourlyMargin)
-              )
-            );
-
-            return {
-              ...track,
-              sampledPoints: weatherPoints,
-              weatherData,
-              weatherFetchedAt: timestamp,
-              updatedAt: timestamp
-            };
-          })
-        );
-        setTracks(updated);
-        saveTracks(updated);
-
-        if (selectedTrack) {
-          const updatedSelected = updated.find(t => t.id === selectedTrack.id);
-          if (updatedSelected) setSelectedTrack(updatedSelected);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    refresh();
-  }, [settings.weatherStart]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -190,9 +148,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point =>
-              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
-            )
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
           );
 
           return {
@@ -256,9 +212,7 @@ function App() {
             : sampledPoints;
 
           const weatherData = await Promise.all(
-            weatherPoints.map(point =>
-              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
-            )
+            weatherPoints.map(point => fetchWeather(point.lat, point.lon))
           );
 
           return {
@@ -536,21 +490,15 @@ function App() {
                 const weatherLabelId = `weather-label-${track.id}`;
                 
                 // Create weather point data
-                const startTs = new Date(settings.weatherStart).getTime();
                 const weatherPointsData = {
                   type: 'FeatureCollection',
                   features: sampledPoints.map((point, idx) => {
                     const weather = track.weatherData ? track.weatherData[idx] : undefined;
-                    const hours = (point.distance || 0) / settings.averageSpeed;
-                    const arr = new Date(startTs + hours * 3600 * 1000);
-                    const labelTime = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const labelTemp = weather && settings.hourlyMargin > 0 &&
-                      weather.temperature_2m_min !== undefined &&
-                      weather.temperature_2m_max !== undefined
-                      ? `${weather.temperature_2m_min.toFixed(1)}-${weather.temperature_2m_max.toFixed(1)}°C`
-                      : weather && weather.temperature !== undefined
-                      ? `~${weather.temperature.toFixed(1)}°C`
+                    const labelTemp = weather
+                      ? `${weather.apparent_temperature_min.toFixed(1)}-${weather.apparent_temperature_max.toFixed(1)}°C`
                       : 'N/A';
+                    const labelWind = weather ? `${weather.wind_speed_10m_max.toFixed(0)} km/h` : '';
+                    const labelRain = weather ? `${weather.rain_sum.toFixed(1)} mm` : '';
 
                     return {
                       type: 'Feature',
@@ -559,12 +507,9 @@ function App() {
                         coordinates: [point.lon, point.lat]
                       },
                       properties: {
-                        temperature: weather && weather.temperature !== undefined ? weather.temperature.toFixed(1) : '',
-                        temperature_min: weather && weather.temperature_2m_min !== undefined ? weather.temperature_2m_min.toFixed(1) : '',
-                        temperature_max: weather && weather.temperature_2m_max !== undefined ? weather.temperature_2m_max.toFixed(1) : '',
                         labelTemp,
-                        precipitation: weather ? weather.precipitation_probability_max : 0,
-                        arrival: labelTime,
+                        wind: labelWind,
+                        rain: labelRain,
                         trackIndex: trackIndex
                       }
                     };
@@ -619,9 +564,9 @@ function App() {
                   layout: {
                     'text-field': [
                       'concat',
-                      ['get', 'arrival'], '\n',
                       ['get', 'labelTemp'], '\n',
-                      ['get', 'precipitation'], '% rain'
+                      ['get', 'wind'], '\n',
+                      ['get', 'rain']
                     ],
                     'text-font': ['Open Sans Regular'],
                     'text-size': 15,
@@ -667,7 +612,7 @@ function App() {
     
     // No need for cleanup, the map layer removal will also remove the event listeners
     return () => {};
-  }, [tracks, selectedTrack, settings]);
+  }, [tracks, selectedTrack]);
 
   // Handle loading demo GPX data
   const loadDemoData = async () => {
@@ -704,9 +649,7 @@ function App() {
           
           // Fetch weather data for each sampled point
           const weatherData = await Promise.all(
-            sampledPoints.map(point =>
-              fetchWeather(point.lat, point.lon, settings.weatherStart, settings.hourlyMargin)
-            )
+            sampledPoints.map(point => fetchWeather(point.lat, point.lon))
           );
 
           // Extract file name without extension and path
@@ -929,6 +872,10 @@ function App() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="weather" className="flex items-center gap-1">
+                  <Cloud className="w-4 h-4" />
+                  <span className="md:inline hidden">Weather</span>
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-1">
                   <SettingsIcon className="w-4 h-4" />
                   <span className="md:inline hidden">Settings</span>
@@ -958,7 +905,6 @@ function App() {
                 <TrackList
                   tracks={tracks}
                   selectedTrackId={selectedTrack?.id}
-                  settings={settings}
                   onSelectTrack={(id) => {
                     const track = tracks.find(t => t.id === id);
                     if (track) {
@@ -968,6 +914,10 @@ function App() {
                   }}
                   onDeleteTrack={handleDeleteTrack}
                 />
+              </TabsContent>
+
+              <TabsContent value="weather" className="m-0 h-full">
+                <WeatherTable track={selectedTrack} />
               </TabsContent>
 
               <TabsContent value="settings" className="m-0 h-full">
