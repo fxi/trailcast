@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ProcessedTrack, UserSettings } from "@/types";
+import { ProcessedTrack } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,15 +34,13 @@ interface TrackListProps {
   selectedTrackId?: string;
   onSelectTrack: (trackId: string) => void;
   onDeleteTrack: (trackId: string | string[]) => void;
-  settings: UserSettings;
 }
 
-export function TrackList({ 
-  tracks, 
-  selectedTrackId, 
+export function TrackList({
+  tracks,
+  selectedTrackId,
   onSelectTrack, 
-  onDeleteTrack,
-  settings
+  onDeleteTrack
 }: TrackListProps) {
   const [selectedTracks, setSelectedTracks] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -100,7 +98,7 @@ export function TrackList({
     const firstId = Array.from(selectedTracks)[0];
     const track = tracks.find(t => t.id === firstId);
     if (track) {
-      exportWeatherPdf(track, settings, exportTitle);
+      exportWeatherPdf(track, exportTitle);
     }
     setShowExportDialog(false);
   };

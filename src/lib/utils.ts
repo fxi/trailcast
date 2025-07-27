@@ -3,7 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import * as toGeoJSON from '@tmcw/togeojson';
 // @ts-ignore - Ignore type issues with bbox
 import bbox from '@turf/bbox';
-import { GpxPoint, WeatherData, DailyWeatherData, ProcessedTrack, UserSettings } from '@/types';
+import { GpxPoint, WeatherData, DailyWeatherData, ProcessedTrack } from '@/types';
 import { jsPDF } from 'jspdf';
 
 export function cn(...inputs: ClassValue[]) {
@@ -182,56 +182,36 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
 
 export async function fetchWeather(
   lat: number,
-  lon: number,
-  dateTime: string,
-  hourlyMargin = 3
+  lon: number
 ): Promise<WeatherData> {
-  const date = dateTime.split('T')[0];
+  const date = new Date().toISOString().split('T')[0];
 
-  // Check cache using only location and date
   const cacheKey = `weather-${lat.toFixed(4)}-${lon.toFixed(4)}-${date}`;
   let daily = getWeatherFromCache(cacheKey);
 
   if (!daily) {
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability&start_date=${date}&end_date=${date}&timezone=UTC`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,wind_direction_10m_dominant,rain_sum&timezone=auto&forecast_days=1`
     );
     const data = await response.json();
     daily = {
-      time: data.hourly.time,
-      temperature_2m: data.hourly.temperature_2m,
-      precipitation_probability: data.hourly.precipitation_probability,
+      time: data.daily.time,
+      apparent_temperature_max: data.daily.apparent_temperature_max,
+      apparent_temperature_min: data.daily.apparent_temperature_min,
+      wind_speed_10m_max: data.daily.wind_speed_10m_max,
+      wind_direction_10m_dominant: data.daily.wind_direction_10m_dominant,
+      rain_sum: data.daily.rain_sum,
     };
     storeWeatherInCache(cacheKey, daily);
   }
 
-  const times: string[] = daily.time;
-  const temps: number[] = daily.temperature_2m;
-  const precs: number[] = daily.precipitation_probability;
-
-  const dt = new Date(dateTime);
-  dt.setMinutes(0, 0, 0);
-  const hourIso = dt.toISOString().slice(0, 13);
-  const idx = times.findIndex((t) => t.startsWith(hourIso));
-
-  const index = idx >= 0 ? idx : 0;
-  const start = Math.max(0, index - hourlyMargin);
-  const end = Math.min(times.length - 1, index + hourlyMargin);
-
-  const rangeTemps = temps.slice(start, end + 1);
-  const rangePrecs = precs.slice(start, end + 1);
-
-  const temp = temps[index];
-  const tempMin = Math.min(...rangeTemps);
-  const tempMax = Math.max(...rangeTemps);
-  const prec = Math.max(...rangePrecs);
-
   const weatherData = {
-    temperature: temp,
-    temperature_2m_max: tempMax,
-    temperature_2m_min: tempMin,
-    precipitation_probability_max: prec,
-    time: dt.toISOString(),
+    time: daily.time[0],
+    apparent_temperature_max: daily.apparent_temperature_max[0],
+    apparent_temperature_min: daily.apparent_temperature_min[0],
+    wind_speed_10m_max: daily.wind_speed_10m_max[0],
+    wind_direction_10m_dominant: daily.wind_direction_10m_dominant[0],
+    rain_sum: daily.rain_sum[0],
   };
 
   return weatherData;
@@ -328,17 +308,12 @@ export function loadSettings(): import('../types').UserSettings {
   try {
     const saved = localStorage.getItem('user-settings');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        weatherStart: parsed.weatherStart || new Date().toISOString(),
-        averageSpeed: parsed.averageSpeed ?? 18,
-        hourlyMargin: Math.max(2, parsed.hourlyMargin ?? 3),
-      };
+      return JSON.parse(saved);
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
-  return { weatherStart: new Date().toISOString(), averageSpeed: 18, hourlyMargin: 3 };
+  return {} as import('../types').UserSettings;
 }
 
 export function calculateBounds(points: GpxPoint[]) {
@@ -355,7 +330,6 @@ export function calculateBounds(points: GpxPoint[]) {
 
 export function exportWeatherPdf(
   track: ProcessedTrack,
-  settings: UserSettings,
   title: string
 ) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -364,22 +338,17 @@ export function exportWeatherPdf(
   doc.text(title, 40, 40);
   doc.setFontSize(12);
 
-  const startTs = new Date(settings.weatherStart).getTime();
   let y = 80;
   track.sampledPoints?.forEach((point, idx) => {
     const weather = track.weatherData?.[idx];
     if (!weather) return;
-    const hours = (point.distance || 0) / settings.averageSpeed;
-    const arr = new Date(startTs + hours * 3600 * 1000);
-    const arrival = arr.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const altitude = point.ele != null ? `${point.ele.toFixed(0)} m` : 'N/A';
-    const rain = `${weather.precipitation_probability_max}%`;
-    const temp = settings.hourlyMargin > 0
-      ? `${weather.temperature_2m_min.toFixed(1)}-${weather.temperature_2m_max.toFixed(1)}°C`
-      : `~${weather.temperature.toFixed(1)}°C`;
+    const rain = `${weather.rain_sum.toFixed(1)} mm`;
+    const temp = `${weather.apparent_temperature_min.toFixed(1)}-${weather.apparent_temperature_max.toFixed(1)}°C`;
+    const wind = `${weather.wind_speed_10m_max.toFixed(0)} km/h`;
 
-    doc.text(`ETA: ${arrival}`, 40, y);
-    doc.text(`Alt: ${altitude}`, 160, y);
+    doc.text(`Alt: ${altitude}`, 40, y);
+    doc.text(`Wind: ${wind}`, 140, y);
     doc.text(`Rain: ${rain}`, 240, y);
     doc.text(`Temp: ${temp}`, 340, y);
     y += 20;
